@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 
+from utils import grad_check
+
 def train_epoch(network, loader, optimizer, epoch, log_interval=50):
     
     network.train()
@@ -18,6 +20,10 @@ def train_epoch(network, loader, optimizer, epoch, log_interval=50):
         
         optimizer.zero_grad()
         loss.backward()
+        
+        if step % 20 == 0:
+            grad_check(network.parameters())
+        
         optimizer.step()
         
         total_loss += loss.item()

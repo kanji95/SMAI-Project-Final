@@ -1,3 +1,5 @@
+import wandb 
+
 import argparse
 
 import torch
@@ -58,6 +60,9 @@ def get_args_parser():
 
 
 def main(args):
+    
+    experiment = wandb.init(project="N3Net", config=args)
+    
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     n_gpu = torch.cuda.device_count()
     print(f"{device} being used with {n_gpu} GPUs!!")
@@ -98,6 +103,8 @@ def main(args):
     if n_gpu > 1:
         n3_net = nn.DataParallel(n3_net)
     n3_net.to(device)
+    
+    wandb.watch(n3_net, log="all")
 
     # Optimizer and Scheduler
     optimizer = torch.optim.Adam(
