@@ -104,7 +104,7 @@ class N3Block(nn.Module):
         T = self.temrature_cnn(x)
 
         # x2col, padding = self.im2col(x)
-        E2col, padding = self.im2col(E)
+        E2col, padding = self.im2col(E/T)
 
         B, N, C = E2col.shape
 
@@ -112,11 +112,14 @@ class N3Block(nn.Module):
         
         ## Distance Metric
         distance = torch.cdist(E2col, E2col)
-        _, indices = torch.topk(distance, dim=-1, k=self.K + 1, largest=False)
+        distance_softmax = F.softmax(distance, dim=-1)
+        
+        weight, indices = torch.topk(distance_softmax, dim=-1, k=self.K + 1, largest=False)
 
         indices = indices.view(B, -1, 1).expand(B, N * (self.K + 1), C)
+        weight = weight[:, :, :, None].expand(B, N, self.K + 1, C)
 
-        E_neighbors = E2col.gather(dim=1, index=indices).view(B, N, self.K + 1, C)
+        E_neighbors = weight*E2col.gather(dim=1, index=indices).view(B, N, self.K + 1, C)
         E_neighbors = E_neighbors[:, :, 1:]
 
         Y = torch.cat([E2col, E_neighbors.view(B, N, -1)], dim=2).transpose(1, 2)
