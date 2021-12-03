@@ -66,7 +66,7 @@ def main(args):
     transform = transforms.Compose(
         [
             transforms.RandomCrop(size=(args.crop_size, args.crop_size)),
-            transforms.RandomRotation(degrees=[0, 90, 180, 270]),
+            # transforms.RandomRotation(degrees=[0, 90, 180, 270]),
             transforms.RandomVerticalFlip(),
             transforms.RandomHorizontalFlip(),
             transforms.RandomGrayscale(p=0.1),
@@ -118,3 +118,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser("N3 Networks", parents=[get_args_parser()])
     args = parser.parse_args()
     print(args)
+
+
+    main(args)

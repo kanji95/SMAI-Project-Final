@@ -6,6 +6,7 @@ import torch.nn.functional as F
 from torch.utils.data import Dataset
 from torchvision.transforms import ToTensor
 
+from glob import glob
 from PIL import Image
 
 class ImageDataset(Dataset):
@@ -17,7 +18,7 @@ class ImageDataset(Dataset):
         self.transform = transform
         
         img_path = os.path.join(self.root, self.split)
-        self.img_files = os.listdir(img_path)
+        self.img_files = glob(img_path + "/*.jpg")
         
     def __len__(self):
         return len(self.img_files)
