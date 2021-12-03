@@ -28,12 +28,12 @@ def validate(network, loader, epoch, log_interval=50):
         ssim_ = ssim(x_recon, x)
         psnr_ = psnr(x_recon, x)
         
-        total_ssim += [ssim_]
-        total_psnr += [psnr_]
+        total_ssim += [ssim_.item()]
+        total_psnr += [psnr_.item()]
         
         if step % log_interval == 0:
             print(f'Epoch: {epoch}, validation_loss: {mean(total_loss)}')
             if epoch % 10 == 0:
-                save_image(x.detach().cpu(), f"orig_epoch_{epoch}_images.png")
-                save_image(x_recon.detach().cpu(), f"recon_epoch_{epoch}_images.png")
+                save_image(x.detach().cpu(), f"./results/orig_epoch_{epoch}_images.png")
+                save_image(x_recon.detach().cpu(), f"./results/recon_epoch_{epoch}_images.png")
     print(f'Validation Epoch: {epoch}, PSNR: {mean(total_psnr)}, SSIM: {mean(total_ssim)}')

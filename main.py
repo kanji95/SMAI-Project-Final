@@ -100,7 +100,7 @@ def main(args):
     n3_net.to(device)
 
     # Optimizer and Scheduler
-    optimizer = torch.optim.AdamW(
+    optimizer = torch.optim.Adam(
         n3_net.parameters(), lr=args.lr, weight_decay=args.weight_decay
     )
     scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=args.gamma)

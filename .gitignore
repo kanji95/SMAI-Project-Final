@@ -1,3 +1,6 @@
 .vscode/
 datasets
 **.DS_Store
+__pycache__/
+batch.sh
+results/
