@@ -1,4 +1,7 @@
 import wandb
+
+import random
+
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")
@@ -7,6 +10,18 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 
 import torch
+import torchvision.transforms.functional as F
+
+
+class RotationTransform:
+    """Rotate by one of the given angles."""
+
+    def __init__(self, angles):
+        self.angles = angles
+
+    def __call__(self, x):
+        angle = random.choice(self.angles)
+        return F.rotate(x, angle)
 
 @torch.no_grad()
 def grad_check(named_parameters):
@@ -21,7 +36,9 @@ def grad_check(named_parameters):
     for n, p in named_parameters:
         # import pdb; pdb.set_trace()
         # print(n)
-        if p.requires_grad and "bias" not in n:
+        if not p.requires_grad:
+            print(n)
+        elif p.requires_grad and "bias" not in n:
             max_grad = p.grad.abs().max()
             mean_grad = p.grad.abs().mean()
             layers.append(n)
@@ -44,7 +61,7 @@ def grad_check(named_parameters):
     ax.bar(x - w, max_grads, width=w, color=max_colors, align="center", hatch="////")
     ax.bar(x, mean_grads, width=w, color=mean_colors, align="center", hatch="----")
 
-    plt.xticks(x - w / 2, layers, rotation="vertical")
+    plt.xticks(x - w / 2, layers, fontsize=4, rotation="vertical")
     plt.xlim(left=-1, right=len(layers))
     plt.ylim(bottom=0.0, top=0.02)  # zoom in on the lower gradient regions
     plt.xlabel("Layers")
