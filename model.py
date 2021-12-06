@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from einops import rearrange
+from einops import rearrange, repeat
 
 
 class DnCNN(nn.Module):
@@ -98,44 +98,78 @@ class N3Block(nn.Module):
 
     def forward(self, x):
 
-        _, _, H, W = x.shape
+        B, C, H, W = x.shape
 
         E = self.embedding_network(x)
         T = self.temrature_cnn(x)
+        
+        Z = torch.zeros_like(E)
+        Z = repeat(Z, 'b c h w -> b (repeat c) h w', repeat=self.K)
+        
+        ### Vectorize this code
+        for i in range(H):
+            for j in range(W):
+                query = E[:, :, i, j] # B, C, 1, 1
+                
+                tl_x = max(0, i - self.patch_size)
+                tl_y = max(0, j - self.patch_size)
+                br_x = min(H, i + self.patch_size)
+                br_y = min(W, j + self.patch_size)
+                
+                neighbor_patch = E[:, :, tl_x:br_x+1, tl_y:br_y+1] # B, C, Ph, Pw
+                
+                query = rearrange(query, 'b c -> b 1 c')
+                neighbor_patch = rearrange(neighbor_patch, 'b c h w -> b (h w) c')
+                
+                distance = -torch.cdist(query, neighbor_patch) # b 1 hw
+                distance_softmax = F.softmax(distance, dim=-1)
+                
+                _, indices = torch.topk(distance_softmax, dim=-1, k=self.K + 1) # b 1 k
+                indices = repeat(indices.squeeze(1), 'b k -> b k c', c=C)
+                neighbors = neighbor_patch.gather(dim=1, index=indices) # b k c
+                neighbors = neighbors[:, :, 1:].reshape(B, -1)
+                
+                Z[:, :, i, j] = neighbors
+                
+        Y = torch.cat([E, Z], dim=1)
+        return Y      
+        
+        # # x2col, padding = self.im2col(x)
+        # E2col, padding = self.im2col(E / T)
 
-        # x2col, padding = self.im2col(x)
-        E2col, padding = self.im2col(E / T)
+        # B, N, M, C = E2col.shape
 
-        B, N, C = E2col.shape
+        # # TODO: Insert Logic for nearest neigbors calculation
 
-        # TODO: Insert Logic for nearest neigbors calculation
+        # ## Distance Metric
+        # # distance = torch.cdist(E2col, E2col)
+        # distance = torch.einsum('bnmc,bnmc->bnm', E2col, E2col)
+        # distance_softmax = F.softmax(distance, dim=-1)
 
-        ## Distance Metric
-        distance = torch.cdist(E2col, E2col)
-        distance_softmax = F.softmax(distance, dim=-1)
+        # weight, indices = torch.topk(
+        #     distance_softmax, dim=-1, k=self.K + 1, largest=False
+        # )
 
-        weight, indices = torch.topk(
-            distance_softmax, dim=-1, k=self.K + 1, largest=False
-        )
+        # indices = repeat(indices, 'b n k -> b n k c', c=C)
+        # # indices = indices.view(B, -1, 1).expand(B, N * (self.K + 1), C)
+        # # weight = weight[:, :, :, None].expand(B, N, self.K + 1, C)
 
-        indices = indices.view(B, -1, 1).expand(B, N * (self.K + 1), C)
-        weight = weight[:, :, :, None].expand(B, N, self.K + 1, C)
+        # # E_neighbors = weight * E2col.gather(dim=1, index=indices).view(
+        # #     B, N, self.K + 1, C
+        # # )
+        # E_neighbors = E2col.gather(dim=2, index=indices)
+        # E_neighbors = E_neighbors[:, :, 1:]
 
-        E_neighbors = weight * E2col.gather(dim=1, index=indices).view(
-            B, N, self.K + 1, C
-        )
-        E_neighbors = E_neighbors[:, :, 1:]
+        # Y = torch.cat([E2col, E_neighbors.view(B, N, -1)], dim=2).transpose(1, 2)
 
-        Y = torch.cat([E2col, E_neighbors.view(B, N, -1)], dim=2).transpose(1, 2)
-
-        Y = F.fold(
-            Y,
-            kernel_size=[self.patch_size] * 2,
-            stride=[self.stride] * 2,
-            output_size=(H, W),
-            padding=padding[0],
-        )
-        return Y
+        # Y = F.fold(
+        #     Y,
+        #     kernel_size=[self.patch_size] * 2,
+        #     stride=[self.stride] * 2,
+        #     output_size=(H, W),
+        #     padding=padding[0],
+        # )
+        # return Y
 
     def im2col(self, x):
         pad_top, pad_bottom, pad_left, pad_right = self.get_padding(x)
@@ -152,16 +186,16 @@ class N3Block(nn.Module):
             stride=[self.stride] * 2,
             padding=[0, 0],
         )
-        x2col = x2col.transpose(1, 2)
-        # x2col = rearrange(
-        #     x2col,
-        #     "b (c kh kw) (fh fw) -> b c (kh kw) (fh fw)",
-        #     c=C,
-        #     kw=self.patch_size,
-        #     kh=self.patch_size,
-        #     fh=f_h,
-        #     fw=f_w,
-        # )
+        # x2col = x2col.transpose(1, 2)
+        x2col = rearrange(
+            x2col,
+            "b (c kh kw) (fh fw) -> b (fh fw) (kh kw) c",
+            c=C,
+            kw=self.patch_size,
+            kh=self.patch_size,
+            fh=f_h,
+            fw=f_w,
+        )
 
         return x2col, (pad_top, pad_bottom, pad_left, pad_right)
 
