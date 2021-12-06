@@ -8,9 +8,13 @@ from einops import rearrange, repeat
 
 
 class DnCNN(nn.Module):
-    def __init__(self, in_channels, out_channels, feature_dim, depth) -> None:
+    def __init__(
+        self, in_channels, out_channels, feature_dim, depth, residual=False, last_block=False
+    ) -> None:
         super(DnCNN, self).__init__()
 
+        self.residual = residual
+        self.last_block = last_block
         self.layer1 = nn.Sequential(
             nn.Conv2d(in_channels, feature_dim, kernel_size=3, stride=1, padding=1),
             nn.ReLU(),
@@ -30,13 +34,28 @@ class DnCNN(nn.Module):
         self.layer2 = nn.Sequential(*layers)
 
         self.layer3 = nn.Sequential(
-            nn.Conv2d(feature_dim, out_channels, kernel_size=3, stride=1, padding=1)
+            nn.Conv2d(feature_dim, out_channels, kernel_size=3, stride=1, padding=1),
+            # nn.ReLU(),
         )
 
+        if residual:
+            self.residual_block = nn.Sequential(
+                nn.Conv2d(feature_dim, out_channels, kernel_size=3, stride=1, padding=1),
+                # nn.ReLU(),
+            )
+
     def forward(self, x):
+        shortcut = torch.clone(x)
+
+        print(x.shape)
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)
+
+        if self.residual:
+            x = x + self.residual_block(shortcut)
+        if self.last_block:
+            x = torch.sigmoid(x)
         return x
 
 
@@ -52,7 +71,7 @@ class N3Block(nn.Module):
         feature_dim=64,
         patch_size=10,
         stride=5,
-        K=7,
+        K=13,
         match_window=15,
     ) -> None:
         super(N3Block, self).__init__()
@@ -73,16 +92,16 @@ class N3Block(nn.Module):
             nn.Conv2d(feature_dim, out_channels, kernel_size=3, stride=1, padding=1),
         )
 
-        # Temprature CNN
-        self.temrature_cnn = nn.Sequential(
-            nn.Conv2d(in_channels, feature_dim, kernel_size=3, stride=1, padding=1),
-            nn.BatchNorm2d(feature_dim),
-            nn.ReLU(),
-            nn.Conv2d(feature_dim, feature_dim, kernel_size=3, stride=1, padding=1),
-            nn.BatchNorm2d(feature_dim),
-            nn.ReLU(),
-            nn.Conv2d(feature_dim, 1, kernel_size=3, stride=1, padding=1),
-        )
+        # # Temprature CNN
+        # self.temprature_cnn = nn.Sequential(
+        #     nn.Conv2d(in_channels, feature_dim, kernel_size=3, stride=1, padding=1),
+        #     nn.BatchNorm2d(feature_dim),
+        #     nn.ReLU(),
+        #     nn.Conv2d(feature_dim, feature_dim, kernel_size=3, stride=1, padding=1),
+        #     nn.BatchNorm2d(feature_dim),
+        #     nn.ReLU(),
+        #     nn.Conv2d(feature_dim, 1, kernel_size=3, stride=1, padding=1),
+        # )
 
     def get_padding(self, x):
         xdim = x.shape[2:]
@@ -101,7 +120,7 @@ class N3Block(nn.Module):
         B, C, H, W = x.shape
 
         E = self.embedding_network(x)
-        T = self.temrature_cnn(x)
+        # T = self.temprature_cnn(x)
         
         Z = torch.zeros_like(E)
         Z = repeat(Z, 'b c h w -> b (repeat c) h w', repeat=self.K)
@@ -127,7 +146,7 @@ class N3Block(nn.Module):
                 _, indices = torch.topk(distance_softmax, dim=-1, k=self.K + 1) # b 1 k
                 indices = repeat(indices.squeeze(1), 'b k -> b k c', c=C)
                 neighbors = neighbor_patch.gather(dim=1, index=indices) # b k c
-                neighbors = neighbors[:, :, 1:].reshape(B, -1)
+                neighbors = neighbors[:, 1:].reshape(B, -1)
                 
                 Z[:, :, i, j] = neighbors
                 
@@ -208,6 +227,7 @@ class N3Net(nn.Module):
         dncnn_feature_dim=64,
         dncnn_blocks=3,
         dncnn_depth=6,
+        K_neighbors=13
     ) -> None:
         super(N3Net, self).__init__()
 
@@ -222,17 +242,23 @@ class N3Net(nn.Module):
                         dncnn_feature_dim,
                         dncnn_depth,
                     ),
-                    N3Block(dncnn_out_channels),
+                    N3Block(dncnn_out_channels, K=K_neighbors),
                 )
             )
-            dncnn_in_channels = dncnn_feature_dim
+            dncnn_in_channels = dncnn_out_channels * (K_neighbors + 1)
         self.n3network = nn.Sequential(*layers)
 
         self.reconstruction_dncnn = DnCNN(
-            dncnn_in_channels, channel_dim, dncnn_feature_dim, dncnn_depth
+            dncnn_in_channels,
+            channel_dim,
+            dncnn_feature_dim,
+            dncnn_depth,
+            residual=False,
+            last_block=True,
         )
 
     def forward(self, x):
+        # import pdb; pdb.set_trace()
         x = self.n3network(x)
         x = self.reconstruction_dncnn(x)
         return x

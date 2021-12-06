@@ -13,6 +13,7 @@ from dataset import ImageDataset
 
 from train import train_epoch
 from evaluate import validate
+from utils import RotationTransform
 
 def get_args_parser():
     parser = argparse.ArgumentParser(
@@ -72,6 +73,7 @@ def main(args):
         [
             transforms.RandomCrop(size=(args.crop_size, args.crop_size)),
             # transforms.RandomRotation(degrees=[0, 90, 180, 270]),
+            RotationTransform(angles=[0, 90, 180, 270]),
             transforms.RandomVerticalFlip(),
             transforms.RandomHorizontalFlip(),
             transforms.RandomGrayscale(p=0.1),
@@ -99,7 +101,7 @@ def main(args):
     )
 
     ## Model Definition
-    n3_net = N3Net()
+    n3_net = N3Net(K_neighbors=args.K)
     if n_gpu > 1:
         n3_net = nn.DataParallel(n3_net)
     n3_net.to(device)
@@ -107,7 +109,7 @@ def main(args):
     wandb.watch(n3_net, log="all")
 
     # Optimizer and Scheduler
-    optimizer = torch.optim.Adam(
+    optimizer = torch.optim.AdamW(
         n3_net.parameters(), lr=args.lr, weight_decay=args.weight_decay
     )
     scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=args.gamma)
@@ -116,9 +118,9 @@ def main(args):
         train_epoch(n3_net, train_loader, optimizer, epoch)
         scheduler.step()
         
-        ## validate after every 4th epoch
-        if epoch % 4 == 0:
-            validate(n3_net, val_loader, epoch)
+        ## # validate after every 4th epoch
+        ## if epoch % 4 == 0:
+        ##     validate(n3_net, val_loader, epoch)
 
 
 if __name__ == "__main__":

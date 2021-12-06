@@ -45,11 +45,12 @@ def validate(network, loader, epoch, log_interval=50):
                 )
                 # save_image(x.detach().cpu(), f"./results/orig_epoch_{epoch}_images.png")
                 # save_image(x_recon.detach().cpu(), f"./results/recon_epoch_{epoch}_images.png")
+
     wandb.log(
         {
             "Val Loss": mean(total_loss),
-            "Val PSNR": {mean(total_psnr)},
-            "Val SSIM": {mean(total_ssim)},
+            "Val PSNR": mean(total_psnr),
+            "Val SSIM": mean(total_ssim),
         }
     )
     print(
