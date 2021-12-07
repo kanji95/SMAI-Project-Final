@@ -17,7 +17,7 @@ def log10(x):
     return x.log() / float(np.log(10))
 
 def psnr(x,y, maxval=1, size_average=True, keepdim=False):
-    mse = ((x-y)**2).view(x.shape[0],-1).mean(dim=1, keepdim=keepdim) + 1e-10*maxval
+    mse = ((x-y)**2).reshape(x.shape[0],-1).mean(dim=1, keepdim=keepdim) + 1e-10*maxval
     psnr = 10* log10(maxval**2/mse)
 
     if size_average:

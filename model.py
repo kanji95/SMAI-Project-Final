@@ -9,7 +9,13 @@ from einops import rearrange, repeat
 
 class DnCNN(nn.Module):
     def __init__(
-        self, in_channels, out_channels, feature_dim, depth, residual=False, last_block=False
+        self,
+        in_channels,
+        out_channels,
+        feature_dim,
+        depth,
+        residual=False,
+        last_block=False,
     ) -> None:
         super(DnCNN, self).__init__()
 
@@ -17,7 +23,7 @@ class DnCNN(nn.Module):
         self.last_block = last_block
         self.layer1 = nn.Sequential(
             nn.Conv2d(in_channels, feature_dim, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(),
+            nn.ReLU(inplace=True),
         )
 
         layers = []
@@ -25,29 +31,33 @@ class DnCNN(nn.Module):
             layers.append(
                 nn.Sequential(
                     nn.Conv2d(
-                        feature_dim, feature_dim, kernel_size=3, stride=1, padding=1
+                        feature_dim,
+                        feature_dim,
+                        kernel_size=3,
+                        stride=1,
+                        padding=1,
+                        bias=False,
                     ),
                     nn.BatchNorm2d(feature_dim),
-                    nn.ReLU(),
+                    nn.ReLU(inplace=True),
                 )
             )
         self.layer2 = nn.Sequential(*layers)
 
         self.layer3 = nn.Sequential(
             nn.Conv2d(feature_dim, out_channels, kernel_size=3, stride=1, padding=1),
-            # nn.ReLU(),
         )
 
         if residual:
             self.residual_block = nn.Sequential(
-                nn.Conv2d(feature_dim, out_channels, kernel_size=3, stride=1, padding=1),
-                # nn.ReLU(),
+                nn.Conv2d(
+                    in_channels, out_channels, kernel_size=3, stride=1, padding=1
+                ),
             )
 
     def forward(self, x):
         shortcut = torch.clone(x)
 
-        print(x.shape)
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)
@@ -57,10 +67,6 @@ class DnCNN(nn.Module):
         if self.last_block:
             x = torch.sigmoid(x)
         return x
-
-
-# {'k': 7, 'patchsize': 10, 'stride': 5, 'temp_opt': {'external_temp': True, 'temp_bias': 0.1, 'distance_bn': True, 'avgpool': True}, 'embedcnn_opt': {'features': 64, 'depth': 3, 'kernel': 3, 'bn': True, 'nplanes_out': 8}}
-# {'features': 64, 'depth': 6, 'kernel': 3, 'bn': True, 'residual': True}
 
 
 class N3Block(nn.Module):
@@ -92,8 +98,8 @@ class N3Block(nn.Module):
             nn.Conv2d(feature_dim, out_channels, kernel_size=3, stride=1, padding=1),
         )
 
-        # # Temprature CNN
-        # self.temprature_cnn = nn.Sequential(
+        # Temprature CNN
+        # self.temperature_cnn = nn.Sequential(
         #     nn.Conv2d(in_channels, feature_dim, kernel_size=3, stride=1, padding=1),
         #     nn.BatchNorm2d(feature_dim),
         #     nn.ReLU(),
@@ -117,78 +123,67 @@ class N3Block(nn.Module):
 
     def forward(self, x):
 
-        B, C, H, W = x.shape
+        # B, C, H, W = x.shape
 
+        ## Embedding Network (B, C, H, W)
         E = self.embedding_network(x)
-        # T = self.temprature_cnn(x)
-        
-        Z = torch.zeros_like(E)
-        Z = repeat(Z, 'b c h w -> b (repeat c) h w', repeat=self.K)
-        
-        ### Vectorize this code
-        for i in range(H):
-            for j in range(W):
-                query = E[:, :, i, j] # B, C, 1, 1
-                
-                tl_x = max(0, i - self.patch_size)
-                tl_y = max(0, j - self.patch_size)
-                br_x = min(H, i + self.patch_size)
-                br_y = min(W, j + self.patch_size)
-                
-                neighbor_patch = E[:, :, tl_x:br_x+1, tl_y:br_y+1] # B, C, Ph, Pw
-                
-                query = rearrange(query, 'b c -> b 1 c')
-                neighbor_patch = rearrange(neighbor_patch, 'b c h w -> b (h w) c')
-                
-                distance = -torch.cdist(query, neighbor_patch) # b 1 hw
-                distance_softmax = F.softmax(distance, dim=-1)
-                
-                _, indices = torch.topk(distance_softmax, dim=-1, k=self.K + 1) # b 1 k
-                indices = repeat(indices.squeeze(1), 'b k -> b k c', c=C)
-                neighbors = neighbor_patch.gather(dim=1, index=indices) # b k c
-                neighbors = neighbors[:, 1:].reshape(B, -1)
-                
-                Z[:, :, i, j] = neighbors
-                
-        Y = torch.cat([E, Z], dim=1)
-        return Y      
-        
-        # # x2col, padding = self.im2col(x)
-        # E2col, padding = self.im2col(E / T)
 
-        # B, N, M, C = E2col.shape
+        B, C, H, W = E.shape
 
-        # # TODO: Insert Logic for nearest neigbors calculation
+        E2col = rearrange(E, "b c h w -> b (h w) c")
+        B, N, C = E2col.shape
 
-        # ## Distance Metric
-        # # distance = torch.cdist(E2col, E2col)
-        # distance = torch.einsum('bnmc,bnmc->bnm', E2col, E2col)
-        # distance_softmax = F.softmax(distance, dim=-1)
+        distance = -torch.cdist(E2col, E2col)
+        distance_softmax = F.softmax(distance, dim=-1)
 
-        # weight, indices = torch.topk(
-        #     distance_softmax, dim=-1, k=self.K + 1, largest=False
-        # )
+        _, indices = torch.topk(distance_softmax, dim=-1, k=self.K + 1)
 
+        indices = indices[:, :, 1:]
         # indices = repeat(indices, 'b n k -> b n k c', c=C)
-        # # indices = indices.view(B, -1, 1).expand(B, N * (self.K + 1), C)
-        # # weight = weight[:, :, :, None].expand(B, N, self.K + 1, C)
 
-        # # E_neighbors = weight * E2col.gather(dim=1, index=indices).view(
-        # #     B, N, self.K + 1, C
-        # # )
-        # E_neighbors = E2col.gather(dim=2, index=indices)
-        # E_neighbors = E_neighbors[:, :, 1:]
+        E_neighbors = torch.zeros_like(E2col)
+        E_neighbors = repeat(E_neighbors, "b n c -> b n k c", k=self.K)
 
-        # Y = torch.cat([E2col, E_neighbors.view(B, N, -1)], dim=2).transpose(1, 2)
+        for batch_idx in range(B):
+            E_neighbors[batch_idx] = E2col[batch_idx, indices[batch_idx]]
 
-        # Y = F.fold(
-        #     Y,
-        #     kernel_size=[self.patch_size] * 2,
-        #     stride=[self.stride] * 2,
-        #     output_size=(H, W),
-        #     padding=padding[0],
-        # )
-        # return Y
+        E_neighbors = rearrange(E_neighbors, "b n k c -> b n (k c)")
+
+        Y = torch.cat([E2col, E_neighbors], dim=-1)
+
+        Y = rearrange(Y, "b (h w) c -> b c h w", h=H, w=W)
+        return Y
+    
+        # Z = torch.zeros_like(E)
+        # Z = repeat(Z, 'b c h w -> b (repeat c) h w', repeat=self.K)
+        
+        # ### Vectorize this code
+        # for i in range(H):
+        #     for j in range(W):
+        #         query = E[:, :, i, j] # B, C, 1, 1
+                
+        #         tl_x = max(0, i - self.patch_size)
+        #         tl_y = max(0, j - self.patch_size)
+        #         br_x = min(H, i + self.patch_size)
+        #         br_y = min(W, j + self.patch_size)
+                
+        #         neighbor_patch = E[:, :, tl_x:br_x+1, tl_y:br_y+1] # B, C, Ph, Pw
+                
+        #         query = rearrange(query, 'b c -> b 1 c')
+        #         neighbor_patch = rearrange(neighbor_patch, 'b c h w -> b (h w) c')
+                
+        #         distance = -torch.cdist(query, neighbor_patch) # b 1 hw
+        #         distance_softmax = F.softmax(distance, dim=-1)
+                
+        #         _, indices = torch.topk(distance_softmax, dim=-1, k=self.K + 1) # b 1 k
+        #         indices = repeat(indices.squeeze(1), 'b k -> b k c', c=C)
+        #         neighbors = neighbor_patch.gather(dim=1, index=indices) # b k c
+        #         neighbors = neighbors[:, 1:].reshape(B, -1)
+                
+        #         Z[:, :, i, j] = neighbors
+                
+        # Y = torch.cat([E, Z], dim=1)
+        # return Y      
 
     def im2col(self, x):
         pad_top, pad_bottom, pad_left, pad_right = self.get_padding(x)
@@ -205,7 +200,6 @@ class N3Block(nn.Module):
             stride=[self.stride] * 2,
             padding=[0, 0],
         )
-        # x2col = x2col.transpose(1, 2)
         x2col = rearrange(
             x2col,
             "b (c kh kw) (fh fw) -> b (fh fw) (kh kw) c",
@@ -219,6 +213,50 @@ class N3Block(nn.Module):
         return x2col, (pad_top, pad_bottom, pad_left, pad_right)
 
 
+class Baseline(nn.Module):
+    def __init__(
+        self,
+        channel_dim=3,
+        dncnn_out_channels=8,
+        dncnn_feature_dim=64,
+        dncnn_blocks=3,
+        dncnn_depth=6,
+    ) -> None:
+        super(Baseline, self).__init__()
+
+        dncnn_in_channels = channel_dim
+        layers = []
+        for _ in range(dncnn_blocks - 1):
+            layers.append(
+                nn.Sequential(
+                    DnCNN(
+                        dncnn_in_channels,
+                        dncnn_out_channels,
+                        dncnn_feature_dim,
+                        dncnn_depth,
+                        residual=True,
+                    ),
+                )
+            )
+            dncnn_in_channels = dncnn_out_channels
+
+        self.n3network = nn.Sequential(*layers)
+
+        self.reconstruction_cnn = DnCNN(
+            dncnn_in_channels,
+            channel_dim,
+            dncnn_feature_dim,
+            dncnn_depth,
+            residual=True,
+            last_block=True,
+        )
+
+    def forward(self, x):
+        x = self.n3network(x)
+        x = self.reconstruction_cnn(x)
+        return x
+
+
 class N3Net(nn.Module):
     def __init__(
         self,
@@ -227,7 +265,7 @@ class N3Net(nn.Module):
         dncnn_feature_dim=64,
         dncnn_blocks=3,
         dncnn_depth=6,
-        K_neighbors=13
+        K_neighbors=7,
     ) -> None:
         super(N3Net, self).__init__()
 
@@ -241,6 +279,7 @@ class N3Net(nn.Module):
                         dncnn_out_channels,
                         dncnn_feature_dim,
                         dncnn_depth,
+                        residual=True,
                     ),
                     N3Block(dncnn_out_channels, K=K_neighbors),
                 )
@@ -248,25 +287,25 @@ class N3Net(nn.Module):
             dncnn_in_channels = dncnn_out_channels * (K_neighbors + 1)
         self.n3network = nn.Sequential(*layers)
 
-        self.reconstruction_dncnn = DnCNN(
+        self.reconstruction_cnn = DnCNN(
             dncnn_in_channels,
             channel_dim,
             dncnn_feature_dim,
             dncnn_depth,
-            residual=False,
+            residual=True,
             last_block=True,
         )
 
     def forward(self, x):
-        # import pdb; pdb.set_trace()
         x = self.n3network(x)
-        x = self.reconstruction_dncnn(x)
+        x = self.reconstruction_cnn(x)
         return x
 
 
 if __name__ == "__main__":
     n3net = N3Net()
-    img = torch.rand(2, 3, 256, 256)
+    img = torch.rand(2, 3, 80, 80)
 
     out = n3net(img)
     print(out.shape)
+        

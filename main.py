@@ -8,8 +8,8 @@ import torch.nn as nn
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
 
-from model import N3Net
-from dataset import ImageDataset
+from model import Baseline, N3Net
+from dataset import *
 
 from train import train_epoch
 from evaluate import validate
@@ -30,6 +30,7 @@ def get_args_parser():
 
     parser.add_argument("--num_crops", default=512, type=int)
     parser.add_argument("--crop_size", default=80, type=int)
+    parser.add_argument("--sigma", default=25, type=int)
 
     parser.add_argument("--model_dir", type=str, default="./saved_model")
 
@@ -76,13 +77,13 @@ def main(args):
             RotationTransform(angles=[0, 90, 180, 270]),
             transforms.RandomVerticalFlip(),
             transforms.RandomHorizontalFlip(),
-            transforms.RandomGrayscale(p=0.1),
+            transforms.RandomGrayscale(p=0.3),
             transforms.ToTensor(),
         ]
     )
 
-    train_data = ImageDataset(args.data_root, split="train", transform=transform)
-    val_data = ImageDataset(args.data_root, split="val", transform=transform)
+    train_data = BSDDataset(args.data_root, split="train", transform=transform)
+    val_data = BSDDataset(args.data_root, split="val", transform=transform)
 
     train_loader = DataLoader(
         train_data,
@@ -102,6 +103,7 @@ def main(args):
 
     ## Model Definition
     n3_net = N3Net(K_neighbors=args.K)
+    # n3_net = Baseline()
     if n_gpu > 1:
         n3_net = nn.DataParallel(n3_net)
     n3_net.to(device)
@@ -109,18 +111,17 @@ def main(args):
     wandb.watch(n3_net, log="all")
 
     # Optimizer and Scheduler
-    optimizer = torch.optim.AdamW(
+    optimizer = torch.optim.Adam(
         n3_net.parameters(), lr=args.lr, weight_decay=args.weight_decay
     )
     scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=args.gamma)
 
     for epoch in range(args.epochs):
-        train_epoch(n3_net, train_loader, optimizer, epoch)
+        train_epoch(n3_net, train_loader, optimizer, epoch, args)
         scheduler.step()
         
-        ## # validate after every 4th epoch
-        ## if epoch % 4 == 0:
-        ##     validate(n3_net, val_loader, epoch)
+        if epoch % 4 == 0:
+            validate(n3_net, val_loader, epoch, args)
 
 
 if __name__ == "__main__":

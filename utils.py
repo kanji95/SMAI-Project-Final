@@ -22,6 +22,21 @@ class RotationTransform:
     def __call__(self, x):
         angle = random.choice(self.angles)
         return F.rotate(x, angle)
+    
+    
+def data_preprocessing(input, sigma):
+        sigma = sigma / 255.0
+        noise = torch.zeros_like(input)
+        noise.normal_(0, 1)
+        noise *= sigma
+        noisy = input + noise
+
+        return noisy, input
+
+def criterion(pred, targets, patch_size=10):
+    lossfac = 1600.0 / patch_size**2
+    loss = (0.5*(pred-targets)**2).reshape(pred.shape[0],-1).sum(dim=1, keepdim=True) * lossfac
+    return loss.mean()
 
 @torch.no_grad()
 def grad_check(named_parameters):
@@ -63,7 +78,7 @@ def grad_check(named_parameters):
 
     plt.xticks(x - w / 2, layers, fontsize=4, rotation="vertical")
     plt.xlim(left=-1, right=len(layers))
-    plt.ylim(bottom=0.0, top=0.02)  # zoom in on the lower gradient regions
+    # plt.ylim(bottom=0.0, top=0.02)  # zoom in on the lower gradient regions
     plt.xlabel("Layers")
     plt.ylabel("Gradient Values")
     plt.title("Model Gradients")
