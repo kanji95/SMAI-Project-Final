@@ -1,4 +1,4 @@
-import wandb 
+import wandb
 
 import argparse
 
@@ -14,6 +14,7 @@ from dataset import *
 from train import train_epoch
 from evaluate import validate
 from utils import RotationTransform
+
 
 def get_args_parser():
     parser = argparse.ArgumentParser(
@@ -62,9 +63,9 @@ def get_args_parser():
 
 
 def main(args):
-    
+
     experiment = wandb.init(project="N3Net", config=args)
-    
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     n_gpu = torch.cuda.device_count()
     print(f"{device} being used with {n_gpu} GPUs!!")
@@ -81,7 +82,12 @@ def main(args):
             transforms.ToTensor(),
         ]
     )
-    val_transform = transforms.Compose([transforms.RandomCrop(size=(args.crop_size, args.crop_size)),transforms.ToTensor(),])
+    val_transform = transforms.Compose(
+        [
+            transforms.RandomCrop(size=(args.crop_size, args.crop_size)),
+            transforms.ToTensor(),
+        ]
+    )
 
     train_data = BSDDataset(args.data_root, split="train", transform=transform)
     # val_data = BSDDataset(args.data_root, split="val", transform=transform)
@@ -104,12 +110,30 @@ def main(args):
     )
 
     ## Model Definition
-    # n3_net = N3Net(K_neighbors=args.K)
-    n3_net = Baseline()
+    """
+    n3_net = N3Net(
+        channel_dim=args.channel_dim,
+        dncnn_out_channels=args.dncnn_out_feat,
+        dncnn_feature_dim=args.dncnn_feat_dim,
+        dncnn_blocks=args.dncnn_blocks,
+        dncnn_depth=args.dncnn_depth,
+        K_neighbors=args.K,
+    )
+    """
+    # """
+    n3_net = Baseline(
+        channel_dim=args.channel_dim,
+        dncnn_out_channels=args.dncnn_out_feat,
+        dncnn_feature_dim=args.dncnn_feat_dim,
+        dncnn_blocks=args.dncnn_blocks,
+        dncnn_depth=args.dncnn_depth,
+    )
+    # """
+    
     if n_gpu > 1:
         n3_net = nn.DataParallel(n3_net)
     n3_net.to(device)
-    
+
     wandb.watch(n3_net, log="all")
 
     # Optimizer and Scheduler
@@ -121,7 +145,7 @@ def main(args):
     for epoch in range(args.epochs):
         train_epoch(n3_net, train_loader, optimizer, epoch, args)
         scheduler.step()
-        
+
         if epoch % 4 == 0:
             validate(n3_net, val_loader, epoch, args)
 
@@ -130,6 +154,5 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser("N3 Networks", parents=[get_args_parser()])
     args = parser.parse_args()
     print(args)
-
 
     main(args)
