@@ -77,14 +77,15 @@ def main(args):
             RotationTransform(angles=[0, 90, 180, 270]),
             transforms.RandomVerticalFlip(),
             transforms.RandomHorizontalFlip(),
-            transforms.RandomGrayscale(p=0.3),
+            # transforms.RandomGrayscale(p=0.3),
             transforms.ToTensor(),
         ]
     )
+    val_transform = transforms.Compose([transforms.RandomCrop(size=(args.crop_size, args.crop_size)),transforms.ToTensor(),])
 
     train_data = BSDDataset(args.data_root, split="train", transform=transform)
     # val_data = BSDDataset(args.data_root, split="val", transform=transform)
-    val_data = Urban100(args.data_root, transform=None)
+    val_data = Urban100(args.data_root, transform=val_transform)
 
     train_loader = DataLoader(
         train_data,

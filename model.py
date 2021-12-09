@@ -238,7 +238,7 @@ class Baseline(nn.Module):
                         dncnn_out_channels,
                         dncnn_feature_dim,
                         dncnn_depth,
-                        residual=True,
+                        residual=False,
                     ),
                 )
             )
@@ -251,8 +251,8 @@ class Baseline(nn.Module):
             channel_dim,
             dncnn_feature_dim,
             dncnn_depth,
-            residual=True,
-            last_block=True,
+            residual=False,
+            last_block=False,
         )
 
     def forward(self, x):

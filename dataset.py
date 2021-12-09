@@ -11,18 +11,18 @@ from PIL import Image
 
 class Urban100(Dataset):
     def __init__(self, root, transform=None) -> None:
-        self.root = root
+        self.root = os.path.join(root, 'Urban100')
         
         self.transform = transform
         img_path = os.path.join(self.root, 'rgb')
-        self.img_files = glob(img_path + "/*.jpg")
+        self.img_files = glob(img_path + "/*.png")
         
     def __len__(self):
         return len(self.img_files)
     
     def __getitem__(self, index):
         img_file = self.img_files[index]
-        img = Image.open(img_file)
+        img = Image.open(img_file).convert('L')
         
         if self.transform:
             img = self.transform(img)
@@ -35,7 +35,7 @@ class BSDDataset(Dataset):
     
     def __init__(self, root, split='train', transform=None) -> None:
         
-        self.root = root
+        self.root = os.path.join(root, 'BSDS500/data/rgb/')
         self.split = split
         self.transform = transform
         
@@ -51,7 +51,7 @@ class BSDDataset(Dataset):
     
     def __getitem__(self, index):
         img_file = self.img_files[index]
-        img = Image.open(img_file)
+        img = Image.open(img_file).convert('L')
         
         if self.transform:
             img = self.transform(img)

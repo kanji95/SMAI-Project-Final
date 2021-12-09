@@ -40,7 +40,7 @@ def train_epoch(network, loader, optimizer, epoch, args, log_interval=50):
         optimizer.zero_grad()
         loss.backward()
 
-        torch.nn.utils.clip_grad_norm_(network.parameters(), 1)
+        torch.nn.utils.clip_grad_norm_(network.parameters(), 100)
 
         if step % 20 == 0:
             grad_check(network.named_parameters())
