@@ -162,10 +162,10 @@ class N3Block(nn.Module):
             for j in range(W):
                 query = E[:, :, i, j] # B, C, 1, 1
                 
-                tl_x = max(0, i - self.patch_size)
-                tl_y = max(0, j - self.patch_size)
-                br_x = min(H, i + self.patch_size)
-                br_y = min(W, j + self.patch_size)
+                tl_x = max(0, i - self.match_window)
+                tl_y = max(0, j - self.match_window)
+                br_x = min(H, i + self.match_window)
+                br_y = min(W, j + self.match_window)
                 
                 neighbor_patch = E[:, :, tl_x:br_x+1, tl_y:br_y+1] # B, C, Ph, Pw
                 
@@ -178,7 +178,7 @@ class N3Block(nn.Module):
                 _, indices = torch.topk(distance_softmax, dim=-1, k=self.K + 1) # b 1 k
                 indices = repeat(indices.squeeze(1), 'b k -> b k c', c=C)
                 neighbors = neighbor_patch.gather(dim=1, index=indices) # b k c
-                neighbors = neighbors[:, 1:].reshape(B, -1)
+                neighbors = rearrange(neighbors[:, 1:], 'b k c -> b (k c)')
                 
                 Z[:, :, i, j] = neighbors
                 
