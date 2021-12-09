@@ -83,7 +83,8 @@ def main(args):
     )
 
     train_data = BSDDataset(args.data_root, split="train", transform=transform)
-    val_data = BSDDataset(args.data_root, split="val", transform=transform)
+    # val_data = BSDDataset(args.data_root, split="val", transform=transform)
+    val_data = Urban100(args.data_root, transform=None)
 
     train_loader = DataLoader(
         train_data,
