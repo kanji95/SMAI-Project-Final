@@ -13,4 +13,4 @@ export CUDA_VISIBLE_DEVICES=0,1,2,3
 
 export PYTHONUNBUFFERED=TRUE
 
-OMP_NUM_THREADS=4 CUDA_VISIBLE_DEVICES=0,1,2,3 python3 main.py --data_root /home/kanishk/smai_project/KNN_Networks/datasets/BSDS500/data/rgb/ --batch_size 8 --sigma 100
+OMP_NUM_THREADS=4 CUDA_VISIBLE_DEVICES=0,1,2,3 python3 main.py --data_root /home/kanishk/smai_project/KNN_Networks/datasets/BSDS500/data/rgb/ --batch_size 8 --sigma 50

@@ -102,8 +102,8 @@ def main(args):
     )
 
     ## Model Definition
-    n3_net = N3Net(K_neighbors=args.K)
-    # n3_net = Baseline()
+    # n3_net = N3Net(K_neighbors=args.K)
+    n3_net = Baseline()
     if n_gpu > 1:
         n3_net = nn.DataParallel(n3_net)
     n3_net.to(device)
