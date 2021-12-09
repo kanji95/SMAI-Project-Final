@@ -42,6 +42,10 @@ class BSDDataset(Dataset):
         img_path = os.path.join(self.root, self.split)
         self.img_files = glob(img_path + "/*.jpg")
         
+        if self.split == 'train':
+            test_path = os.path.join(self.root, 'test')
+            self.img_files += glob(test_path + "/*.jpg")
+        
     def __len__(self):
         return len(self.img_files)
     

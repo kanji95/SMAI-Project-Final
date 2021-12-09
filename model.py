@@ -127,63 +127,67 @@ class N3Block(nn.Module):
 
         ## Embedding Network (B, C, H, W)
         E = self.embedding_network(x)
+        # T = self.tempreature_cnn(x)
 
         B, C, H, W = E.shape
 
-        # E2col = rearrange(E, "b c h w -> b (h w) c")
-        # B, N, C = E2col.shape
+        E2col = rearrange(E, "b c h w -> b (h w) c")
+        B, N, C = E2col.shape
 
-        # distance = -torch.cdist(E2col, E2col)
-        # distance_softmax = F.softmax(distance, dim=-1)
+        distance = -torch.cdist(E2col, E2col)
+        distance_softmax = F.softmax(distance, dim=-1)
 
-        # _, indices = torch.topk(distance_softmax, dim=-1, k=self.K + 1)
+        _, indices = torch.topk(distance_softmax, dim=-1, k=self.K + 1)
 
-        # indices = indices[:, :, 1:]
-        # # indices = repeat(indices, 'b n k -> b n k c', c=C)
+        indices = indices[:, :, 1:]
+        # indices = repeat(indices, 'b n k -> b n k c', c=C)
 
-        # E_neighbors = torch.zeros_like(E2col)
-        # E_neighbors = repeat(E_neighbors, "b n c -> b n k c", k=self.K)
+        E_neighbors = torch.zeros_like(E2col)
+        E_neighbors = repeat(E_neighbors, "b n c -> b n k c", k=self.K)
 
-        # for batch_idx in range(B):
-        #     E_neighbors[batch_idx] = E2col[batch_idx, indices[batch_idx]]
+        for batch_idx in range(B):
+            E_neighbors[batch_idx] = E2col[batch_idx, indices[batch_idx]]
 
-        # E_neighbors = rearrange(E_neighbors, "b n k c -> b n (k c)")
+        E_neighbors = rearrange(E_neighbors, "b n k c -> b n (k c)")
 
-        # Y = torch.cat([E2col, E_neighbors], dim=-1)
+        Y = torch.cat([E2col, E_neighbors], dim=-1)
 
-        # Y = rearrange(Y, "b (h w) c -> b c h w", h=H, w=W)
-        # return Y
-    
-        Z = torch.zeros_like(E)
-        Z = repeat(Z, 'b c h w -> b (repeat c) h w', repeat=self.K)
+        Y = rearrange(Y, "b (h w) c -> b c h w", h=H, w=W)
+        return Y
         
-        ### Vectorize this code
-        for i in range(H):
-            for j in range(W):
-                query = E[:, :, i, j] # B, C, 1, 1
+        # pad_top, pad_bottom, pad_left, pad_right = self.get_padding(E)
+        # E_pad = F.pad(E, pad=(pad_top, pad_bottom, pad_left, pad_right))
+    
+        # Z = torch.zeros_like(E)
+        # Z = repeat(Z, 'b c h w -> b (repeat c) h w', repeat=self.K)
+        
+        # ### Vectorize this code
+        # for i in range(H):
+        #     for j in range(W):
+        #         query = E[:, :, i, j] # B, C, 1, 1
                 
-                tl_x = max(0, i - self.patch_size)
-                tl_y = max(0, j - self.patch_size)
-                br_x = min(H, i + self.patch_size)
-                br_y = min(W, j + self.patch_size)
+        #         tl_x = max(0, i - self.patch_size)
+        #         tl_y = max(0, j - self.patch_size)
+        #         br_x = min(H, i + self.patch_size)
+        #         br_y = min(W, j + self.patch_size)
                 
-                neighbor_patch = E[:, :, tl_x:br_x+1, tl_y:br_y+1] # B, C, Ph, Pw
+        #         neighbor_patch = E[:, :, tl_x:br_x+1, tl_y:br_y+1] # B, C, Ph, Pw
                 
-                query = rearrange(query, 'b c -> b 1 c')
-                neighbor_patch = rearrange(neighbor_patch, 'b c h w -> b (h w) c')
+        #         query = rearrange(query, 'b c -> b 1 c')
+        #         neighbor_patch = rearrange(neighbor_patch, 'b c h w -> b (h w) c')
                 
-                distance = -torch.cdist(query, neighbor_patch) # b 1 hw
-                distance_softmax = F.softmax(distance, dim=-1)
+        #         distance = -torch.cdist(query, neighbor_patch) # b 1 hw
+        #         distance_softmax = F.softmax(distance, dim=-1)
                 
-                _, indices = torch.topk(distance_softmax, dim=-1, k=self.K + 1) # b 1 k
-                indices = repeat(indices.squeeze(1), 'b k -> b k c', c=C)
-                neighbors = neighbor_patch.gather(dim=1, index=indices) # b k c
-                neighbors = neighbors[:, 1:].reshape(B, -1)
+        #         _, indices = torch.topk(distance_softmax, dim=-1, k=self.K + 1) # b 1 k
+        #         indices = repeat(indices.squeeze(1), 'b k -> b k c', c=C)
+        #         neighbors = neighbor_patch.gather(dim=1, index=indices) # b k c
+        #         neighbors = neighbors[:, 1:].reshape(B, -1)
                 
-                Z[:, :, i, j] = neighbors
+        #         Z[:, :, i, j] = neighbors
                 
-        Y = torch.cat([E, Z], dim=1)
-        return Y      
+        # Y = torch.cat([E, Z], dim=1)
+        # return Y      
 
     def im2col(self, x):
         pad_top, pad_bottom, pad_left, pad_right = self.get_padding(x)
