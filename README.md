@@ -1,6 +1,6 @@
-# Neural Nearest Neighbor
+# SMAI Final Project 
 
-Unnoficial Implementation in Pytorch: [Paper](https://proceedings.neurips.cc/paper/2018/file/f0e52b27a7a5d6a1a87373dffa53dbe5-Paper.pdf)
+Unnoficial Implementation in Pytorch: [Neural Nearest Neighbor](https://proceedings.neurips.cc/paper/2018/file/f0e52b27a7a5d6a1a87373dffa53dbe5-Paper.pdf)
 
 
 ## Results
